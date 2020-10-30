@@ -1,4 +1,9 @@
-import <packages>
+import numpy as np
+import random
+import pyopencl as cl
+import pyopencl.array as pocl_array
+import matplotlib.pyplot as plt
+
 
 
 class Transpose:
@@ -10,17 +15,28 @@ class Transpose:
             if platform.name == NAME:
                 devs = platform.get_devices()
         self.ctx = cl.Context(devs)
-        self.queue = cl.CommandQueue(self.ctx, properties=cl.command_queue_properties.PROFILING_ENABLE)
+        self.queue = cl.CommandQueue(
+            self.ctx,
+            properties=cl.command_queue_properties.PROFILING_ENABLE)
 
         # host variables
         self.x = x_cpu
-
+        self.height = x_cpu.shape[0]; # number of rows
+        self.width = x_cpu.shape[1]; # number of columns
         # kernel code for transpose
         self.transpose_kernel_code = """
+        __kernel void transpose(__global float *out, 
+        __global float *in, const int height, const int width)
+        {
+             int idx = get_global_id(0);
+             old_col = idx % width;
+             old_row = idx / width;
+             out[idx] = height * old_col; + old_row;
+        }
         """
 
         # build kernel
-        
+        self.prg = cl.Program(self.ctx, self.transpose_kernel_code).build()
 
 
     def transpose_parallel(self):
@@ -29,10 +45,18 @@ class Transpose:
         Should return array transpose and execution time.
         """
         # device memory allocation
+        d_x = pocl_array.to_device(self.queue, self.x);
+        y_gpu = pocl_array.empty((self.width, self.height));
 
         # call function and time it
+        event = self.prg.transpose(self.queue, self.x.shape,
+                                   None, y_gpu, d_x, self.height, self.width);
+        event.wait();
 
-        return self.y_gpu.get(), np.average(timing)
+        time_ = event.profile.end - event.profile.start
+        
+        return self.y_gpu.get(), time_
+    #np.average(timing)
 
 
 
@@ -50,7 +74,8 @@ class alpha:
             if platform.name == NAME:
                 devs = platform.get_devices()
         self.ctx = cl.Context(devs)
-        self.queue = cl.CommandQueue(self.ctx, properties=cl.command_queue_properties.PROFILING_ENABLE)
+        self.queue = cl.CommandQueue(
+            self.ctx, properties=cl.command_queue_properties.PROFILING_ENABLE)
 
         # host variables
 
@@ -82,3 +107,13 @@ class alpha:
 if __name__ == "__main__":
 
     # Main code
+
+    height = random.randint(1, 10);
+    width = random.randint(1, 10);
+
+    in = np.random.rand(height, width).astype(np.float32);
+    myObject = Transpose(in)
+    opencl_result = myObject.transpose_parallel()
+
+    print(opencl_result[0])
+    
