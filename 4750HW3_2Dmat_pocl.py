@@ -26,7 +26,7 @@ class Transpose:
         self.width = x_cpu.shape[1] # number of columns
 #        print(self.width)
         self.y_gpu = np.empty([self.width, self.height])
-# kernel code for transpose
+        # kernel code for transpose
         self.transpose_kernel_code = """
         __kernel void transpose(__global float *out, 
         __global float *in, const int height, const int width)
@@ -77,7 +77,7 @@ class Transpose:
         return self.y_gpu,(end_-start_)*1e+6 # in us.
 
 class alpha:
-    def __init__(self, a_cpu, b_cpu):
+    def __init__(self, a_cpu, b_cpu, alpha):
         NAME = 'NVIDIA CUDA'
         platforms = cl.get_platforms()
         devs = None
@@ -93,7 +93,7 @@ class alpha:
         self.a = a_cpu
         self.b = b_cpu
         self.length = a_cpu.shape[0]
-        self.alpha = random.randint(1,10)/10# value for alpha
+        self.alpha = alpha
      
         # kernel code for blending
         self.blend_kernel_code = """
@@ -139,7 +139,7 @@ if __name__ == "__main__":
     height = random.randint(1, 10)
     width = random.randint(1, 10)
     num_matrix = 10
-    print("matrix transpose operation in parallel and in serial:\n\n")
+    print("=========== matrix transpose ===============")
     print("base matrix size is (", height, ", ", width, ")\n")
     
     time_cl_trans = np.ones((5, num_matrix))
@@ -184,7 +184,7 @@ if __name__ == "__main__":
                 
     
     ##### image blend #####
-
+    print("\n\n========== alpha blending =============")
     im_1 = Image.open('image_1.jpg')
     im_2 = Image.open('image_2.jpg')
     im1_gray = ImageOps.grayscale(im_1)
@@ -196,18 +196,14 @@ if __name__ == "__main__":
     Trans_Obj = Transpose(im1_gray_array)
     trans_im1_gray_array, time_trans = Trans_Obj.transpose_parallel()
 
-    
-    
-    Blend_Obj = alpha(trans_im1_gray_array, im2_gray_array)
+    alpha = random.randint(1,10)/10# value for alpha
+    print("alpha = ", alpha)
+    Blend_Obj = alpha(trans_im1_gray_array, im2_gray_array, alpha)
     blend_result, blend_time  = Blend_Obj.alpha_blend()
 
 
     pil_img = Image.fromarray(blend_result)
-    print(pil_img.mode)
-
     new_img = pil_img.convert('RGB')
-    print(new_img.mode)
-
     new_img.save('plots/alpha_blending.jpg')
     
     
