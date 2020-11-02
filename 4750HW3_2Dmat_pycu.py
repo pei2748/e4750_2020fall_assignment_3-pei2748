@@ -38,15 +38,14 @@ class MatrixMultiply:
             int ty = threadIdx.y;
             int bx = blockIdx.x;
             int by = blockIdx.y;
-            int Col = TILE_WIDTH * bx + tx;
-            int Row = TILE_WIDTH * by + ty;
-            float tmp = 0;
-            for(int t = 0; t < (TILE_WIDTH + N - 1)/TILE_WIDTH; ++t) {
-               for (int i = 0; i < TILE_WIDTH; ++i)
-                   tmp += A[Row * N + t * TILE_WIDTH + i] * B[(t * TILE_WIDTH + i) * M + Col];
-            }            
-            if(Row < M && Col < M)
+            int Col = blockDim.x * bx + tx;
+            int Row = blockDim.y * by + ty;
+            if((Row < M) && (Col < M)) {
+               float tmp = 0;
+               for (int i = 0; i < N; ++i)
+                   tmp += A[Row * N + i] * B[i * M + Col];
                C[Row * M + Col] = tmp;
+            }            
         }
         """
 
@@ -66,19 +65,18 @@ class MatrixMultiply:
             int Row = TILE_WIDTH * by + ty;
             float tmp = 0;
             for(int t = 0; t < (TILE_WIDTH + N - 1)/TILE_WIDTH; ++t) {
-                if(t * TILE_WIDTH + ty < N && Col < M ) 
-                     ds_B[ty][tx] = B[(t * TILE_WIDTH + ty) * M + Col];
-                else
-                     ds_B[ty][tx] = 0;
-                __syncthreads();
-                for (int i = 0; i < TILE_WIDTH; ++i)
-                     tmp += A[Row * N + t * TILE_WIDTH + i] * ds_B[i][tx];
-                __syncthreads();
-                
+                   if(t * TILE_WIDTH + ty < N && Col < M ) 
+                        ds_B[ty][tx] = B[(t * TILE_WIDTH + ty) * M + Col];
+                   else
+                        ds_B[ty][tx] = 0;
+                   __syncthreads();
+                   for (int i = 0; i < TILE_WIDTH; ++i)
+                        tmp += A[Row * N + t * TILE_WIDTH + i] * ds_B[i][tx];
+                   __syncthreads();                
             }
-            if(Row < M && Col < M)
+            if(Row < M && Col < M) {
                 C[Row * M + Col] = tmp;
-            
+            } // end of if            
         }
         """
 
@@ -102,22 +100,23 @@ class MatrixMultiply:
             // compute the total tiles needed
             // iterate through all the tiles for A from left to right
             for(int k = 0; k < (TILE_WIDTH + N - 1)/TILE_WIDTH; k++) {
-                if(k * TILE_WIDTH + tx < N && Row < M)
-                     ds_A[ty][tx] = A[Row * N + k * TILE_WIDTH + tx];
-                else
-                     ds_A[ty][tx] = 0;
-                if(k * TILE_WIDTH + ty < N && Col < M ) 
-                     ds_B[ty][tx] = B[(k * TILE_WIDTH + ty) * M + Col];
-                else
-                     ds_B[ty][tx] = 0;
-                __syncthreads();
+                    if(k * TILE_WIDTH + tx < N && Row < M)
+                        ds_A[ty][tx] = A[Row * N + k * TILE_WIDTH + tx];
+                    else
+                        ds_A[ty][tx] = 0;
+                    if(k * TILE_WIDTH + ty < N && Col < M ) 
+                        ds_B[ty][tx] = B[(k * TILE_WIDTH + ty) * M + Col];
+                    else
+                        ds_B[ty][tx] = 0;
+                    __syncthreads();
 
-                for (int i = 0; i < TILE_WIDTH; ++i)
-                     tmp += ds_A[ty][i] * ds_B[i][tx];
-                __syncthreads();
-            }
-            if(Row < M && Col < M)
-                C[(by * blockDim.y + ty) * M + bx * blockDim.x + tx] = tmp;
+                    for (int i = 0; i < TILE_WIDTH; ++i)
+                        tmp += ds_A[ty][i] * ds_B[i][tx];
+                    __syncthreads();
+            } // end of for 
+            if(Row < M && Col < M) {
+                    C[(by * blockDim.y + ty) * M + bx * blockDim.x + tx] = tmp;
+            } // end of if
         }
         """
         # Build kernel codes (x3)
@@ -217,7 +216,7 @@ if __name__ == '__main__':
             end = time.time()
             time_cpu[i][p] = (end - start)*1e+3 # in ms
             try:
-                assert (np.all(((out_naive - out_cpu)/out_cpu < 0.0001)))
+                assert (np.all(((out_naive - out_cpu)/out_cpu < 0.001)))
             except AssertionError:
                 print("\nCheckpoint failed: naive results doesn't match CPU result!\n")
             print("naive and CPU results match!")
