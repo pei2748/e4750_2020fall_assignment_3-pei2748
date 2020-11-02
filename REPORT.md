@@ -12,7 +12,7 @@
 
 ## Assignment Overview
 
-Write 2 or 3 sentences here, summarizing what are the key points of this assignment, from your point of view. You may speculate on the importance of the key concept, or comment on similarities and differences with previous assignments. 
+This assignment helps me understand the indexing of 2D problems of both Pyopencl and Pycuda. The arbitrary size matrix multiplication let me run the tiling method and memory optimization, which helps me have a deeper understanding of tiling approach. 
 
 ## Task-1: PyOpenCL
 
