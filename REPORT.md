@@ -35,9 +35,10 @@ Image blending has two matrix operation: matrix transpose and matrix addition. B
 
 For the CPU execution time, I collect the time from running numpy.matmul() function. For the naive matrix multiplication, no tiling. But the block size and grid size have relationship with the tile width. This should not impact the execution time of the naive algorithm. For optimization 1, we only store matrix B into shared memory. While for optimization 2, we store both A and B tiles into shared memory. I generated a random-sized matrix by generating 2 random number between 1 to 10. One is height and the other is width. Then I iteratively increase the matrix size by multipling height and width with 2^p with p ranging from 0 to 10. So the maximum possible height and width is 1024 * 10 = 10240. For this assignment, I define the tile width as 16. 
 
-Below is the running results of 4 computing method. When the matrix size is small, numpy has smaller execution time since running pycuda on GPU needs to launch context, which is the overhead. But when matrix size is large, Running on GPU is faster since running in parallel. Loading matrix tile into shared memory can reduce executing time since it reduces memory traffic.  
+Below is the running results of 4 computing method. When the matrix size is small, numpy has smaller execution time since running pycuda on GPU needs to launch context, which is the overhead. But when matrix size is large, Running on GPU is faster since running in parallel. Loading matrix tile into shared memory can reduce executing time since it reduces memory traffic. The first figure has base matrix size as (6,1), the second figure has base matrix size as (10,10). Base matrix sizes are randomly generated.
 
-![caption](plots/HW3_mmul_time_comparison.png)
+![caption](plots/HW3_mmul_time_comparison-0.png)
+![caption](plots/HW3_mmul_time_comparison-1.png)
 
 The nvvc profiling also supports the results. We can see that the executing time of optimization 2 is the shortest while the naive method is the longest. The "GPU details (summary)" shows that optimized2 kernel used 2048 shared memory space while optimized1 used 1024 shared memory space. 
 
@@ -87,3 +88,4 @@ In CUDA, the memory shared by one thread block is called shared memory while in 
 
 3. [PyOpencl matrix multiplication](https://github.com/stefanv/PyOpenCL)
  
+4. [Stackoverflow](https://stackoverflow.com/questions/18815489/cuda-tiled-matrix-matrix-multiplication-with-shared-memory-and-matrix-size-whic)
