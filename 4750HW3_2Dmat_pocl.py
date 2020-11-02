@@ -167,19 +167,20 @@ if __name__ == "__main__":
     print("{0:<8},{1:>20},{2:>20}".format("size_factor", "Exec_t_parallel", "Exec_t_serial"))
     for i in range(num_matrix):
         print('{0:<14},{1:>20},{2:>20}'.format(i, avg_time_cl_trans[i], avg_time_py_trans[i]))
-        x = np.linspace(1,num_matrix,num_matrix)
-        fig, ax = plt.subplots()
-        line1, = ax.plot(x, avg_time_cl_trans, label='pyopencl_parallel')
-        line2, = ax.plot(x, avg_time_py_trans, label = 'python_serial')
-        ax.set_title('Execution Time comparison of parallel and serial')
-        ax.set_xlabel('factor of matrix size')
-        ax.set_ylabel('Time (us) -- Log scale')
-        ax.set_yscale('log')
-        ax.grid(True)
-        ax.set_xlim(0,num_matrix + 1)
-        ax.xaxis.set_ticks(np.arange(0,num_matrix + 1, 2))
-        ax.legend()                
-        plt.savefig("plots/HW3_transpose_time_comparison.png")
+
+    x = np.linspace(1,num_matrix,num_matrix)
+    fig, ax = plt.subplots()
+    line1, = ax.plot(x, avg_time_cl_trans, label='pyopencl_parallel')
+    line2, = ax.plot(x, avg_time_py_trans, label = 'python_serial')
+    ax.set_title('Execution Time comparison of parallel and serial')
+    ax.set_xlabel('factor of matrix size')
+    ax.set_ylabel('Time (us) -- Log scale')
+    ax.set_yscale('log')
+    ax.grid(True)
+    ax.set_xlim(0,num_matrix + 1)
+    ax.xaxis.set_ticks(np.arange(0,num_matrix + 1, 2))
+    ax.legend()                
+    plt.savefig("plots/HW3_transpose_time_comparison.png")
                 
     
     ##### image blend #####
@@ -188,6 +189,7 @@ if __name__ == "__main__":
     im_2 = Image.open('image_2.jpg')
     im1_gray = ImageOps.grayscale(im_1)
     im2_gray = ImageOps.grayscale(im_2)
+
     im1_gray_array = np.array(im1_gray) # (500, 500)
     im2_gray_array = np.array(im2_gray) # (500, 500)
 
@@ -202,7 +204,7 @@ if __name__ == "__main__":
 
     pil_img = Image.fromarray(blend_result)
     print(pil_img.mode)
-    # RGB
+
     new_img = pil_img.convert('RGB')
     print(new_img.mode)
 

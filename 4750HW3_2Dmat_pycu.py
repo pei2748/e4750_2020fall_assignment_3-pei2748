@@ -13,7 +13,7 @@ import random
 
 
 class MatrixMultiply:
-    def __init__(self, height, width):
+    def __init__(self, a_height, a_width):
         """
         Attributes for instance of deviceAdd module
         Includes kernel code and input variables.
@@ -23,7 +23,7 @@ class MatrixMultiply:
         # tile parameters
         self.tile_width = 16
         self.block = (self.tile_width, self.tile_width, 1)
-        m = max(height, width)
+        m = max(a_height, a_width)
         self.grid = (math.ceil(m/self.tile_width), math.ceil(m/self.tile_width), 1)
 
         
@@ -32,22 +32,21 @@ class MatrixMultiply:
         __global__ void Matrix_multiply_naive(float *A, float *B, float *C,
         const unsigned int M, const unsigned int N)
         {
-            // Your kernel code here
+            // M is a_height, N is a_width
             // one thread computes one row of input
             int tx = threadIdx.x;
             int ty = threadIdx.y;
             int bx = blockIdx.x;
             int by = blockIdx.y;
-            int Col = blockDim.x * bx + tx;
-            int Row = blockDim.y * by + ty;
-            float tmp;
-            int i;
-//            if(Row < M && Col < M) {
-            tmp = 0;
-            for(i = 0; i < N; i++)
-                     tmp += A[Row * N + i] * B[i * M + Col];
-            C[Row * M + Col] = tmp;
-//            }
+            int Col = TILE_WIDTH * bx + tx;
+            int Row = TILE_WIDTH * by + ty;
+            float tmp = 0;
+            for(int t = 0; t < (TILE_WIDTH + N - 1)/TILE_WIDTH; ++t) {
+               for (int i = 0; i < TILE_WIDTH; ++i)
+                   tmp += A[Row * N + t * TILE_WIDTH + i] * B[(t * TILE_WIDTH + i) * M + Col];
+            }            
+            if(Row < M && Col < M)
+               C[Row * M + Col] = tmp;
         }
         """
 
@@ -63,20 +62,22 @@ class MatrixMultiply:
             int ty = threadIdx.y;
             int bx = blockIdx.x;
             int by = blockIdx.y;
-            int Col = blockDim.x * bx + tx;
-            int Row = blockDim.y * by + ty;
+            int Col = TILE_WIDTH * bx + tx;
+            int Row = TILE_WIDTH * by + ty;
             float tmp = 0;
-            for(int t = 0; t < (N/TILE_WIDTH + 1); ++t) {
-                if(Row < M && Col < N) {
-                     //ds_A[ty][tx] = A[Row * N + t * TILE_WIDTH + tx];
+            for(int t = 0; t < (TILE_WIDTH + N - 1)/TILE_WIDTH; ++t) {
+                if(t * TILE_WIDTH + ty < N && Col < M ) 
                      ds_B[ty][tx] = B[(t * TILE_WIDTH + ty) * M + Col];
-                     __syncthreads();
-                     for (int i = 0; i < TILE_WIDTH; ++i)
-                          tmp += A[Row * N + t * TILE_WIDTH + tx + i] * ds_B[i][tx];
-                     __syncthreads();
-                }
+                else
+                     ds_B[ty][tx] = 0;
+                __syncthreads();
+                for (int i = 0; i < TILE_WIDTH; ++i)
+                     tmp += A[Row * N + t * TILE_WIDTH + i] * ds_B[i][tx];
+                __syncthreads();
+                
             }
-            C[Row * M + Col] = tmp;
+            if(Row < M && Col < M)
+                C[Row * M + Col] = tmp;
             
         }
         """
@@ -95,18 +96,28 @@ class MatrixMultiply:
             int ty = threadIdx.y;
             int bx = blockIdx.x;
             int by = blockIdx.y;
-            int Col = blockDim.x * bx + tx;
-            int Row = blockDim.y * by + ty;
+            int Col = TILE_WIDTH * bx + tx;
+            int Row = TILE_WIDTH * by + ty;
             float tmp = 0;
-            for(int t = 0; t < N/TILE_WIDTH; ++t) {
-                ds_A[ty][tx] = A[Row * N + t * TILE_WIDTH + tx];
-                ds_B[ty][tx] = B[(t * TILE_WIDTH + ty) * M + Col];
+            // compute the total tiles needed
+            // iterate through all the tiles for A from left to right
+            for(int k = 0; k < (TILE_WIDTH + N - 1)/TILE_WIDTH; k++) {
+                if(k * TILE_WIDTH + tx < N && Row < M)
+                     ds_A[ty][tx] = A[Row * N + k * TILE_WIDTH + tx];
+                else
+                     ds_A[ty][tx] = 0;
+                if(k * TILE_WIDTH + ty < N && Col < M ) 
+                     ds_B[ty][tx] = B[(k * TILE_WIDTH + ty) * M + Col];
+                else
+                     ds_B[ty][tx] = 0;
                 __syncthreads();
+
                 for (int i = 0; i < TILE_WIDTH; ++i)
                      tmp += ds_A[ty][i] * ds_B[i][tx];
                 __syncthreads();
             }
-            C[Row * M + Col] = tmp;
+            if(Row < M && Col < M)
+                C[(by * blockDim.y + ty) * M + bx * blockDim.x + tx] = tmp;
         }
         """
         # Build kernel codes (x3)
@@ -132,7 +143,7 @@ class MatrixMultiply:
         _end.record()
         _end.synchronize()
         c_naive = dc.get()
-        time_naive = _start.time_till(_end) # in ns
+        time_naive = _start.time_till(_end) # in ms
         return c_naive, time_naive
 
     def matrix_mul_optimized1(self, a_cpu, b_cpu):
@@ -154,7 +165,7 @@ class MatrixMultiply:
         _end.record()
         _end.synchronize()
         c_optimized1 = dc.get()
-        time_optimized1 = _start.time_till(_end)  # in ns
+        time_optimized1 = _start.time_till(_end)  # in ms
         return c_optimized1, time_optimized1
 
     def matrix_mul_optimized2(self, a_cpu, b_cpu):
@@ -176,7 +187,7 @@ class MatrixMultiply:
         _end.record()
         _end.synchronize()
         c_optimized2 = dc.get()
-        time_optimized2 = _start.time_till(_end) # in ns
+        time_optimized2 = _start.time_till(_end) # in ms
         return c_optimized2, time_optimized2
 
 if __name__ == '__main__':
@@ -184,69 +195,57 @@ if __name__ == '__main__':
     # execution and plot
     height = random.randint(1, 10)
     width = random.randint(1, 10)
-    matrix_factor = 1
-    time_naive = np.ones((5, matrix_factor))
-    time_optimized1 = np.ones((5, matrix_factor))
-    time_optimized2 = np.ones((5, matrix_factor))
-    time_cpu = np.ones((5, matrix_factor))
+    matrix_factor = 10
+    time_naive = np.ones((5, matrix_factor + 1))
+    time_optimized1 = np.ones((5, matrix_factor + 1))
+    time_optimized2 = np.ones((5, matrix_factor + 1))
+    time_cpu = np.ones((5, matrix_factor + 1))
     # 5, 10, 50, 100, 500, 1000, 5000, 10000,
     # 2^i (2^10: 1024)
-    print("The base matrix size is (", height,", ", width, ")\n")
-    for p in range(matrix_factor):
-        print("the matrix size factor is ",2**p)
-        for i in range(1):
+    print("base matrix size is (", height,", ", width, ")\n")
+    for p in range(matrix_factor + 1):
+        for i in range(5):
+            print("matrix size is (", height * 2**p,", ", width * 2**p, ")\n")
             a_cpu = np.random.rand(height*(2**p), width*(2**p)).astype(np.float32)
             b_cpu = np.random.rand(width*(2**p), height*(2**p)).astype(np.float32)
-            print(a_cpu)
-            print("=====================")
-            print(b_cpu)
             Mmul_obj = MatrixMultiply(height*(2**p),width*(2**p))
             out_naive, time_naive[i][p] = Mmul_obj.matrix_mul_naive(a_cpu, b_cpu)
-#            out_optimized1, time_optimized1[i][p] = Mmul_obj.matrix_mul_optimized1(a_cpu, b_cpu)
-#            out_optimized2, time_optimized2[i][p] = Mmul_obj.matrix_mul_optimized2(a_cpu, b_cpu)
+            out_optimized1, time_optimized1[i][p] = Mmul_obj.matrix_mul_optimized1(a_cpu, b_cpu)
+            out_optimized2, time_optimized2[i][p] = Mmul_obj.matrix_mul_optimized2(a_cpu, b_cpu)
             start = time.time()
             out_cpu = np.matmul(a_cpu, b_cpu)
             end = time.time()
-            time_cpu[i][p] = (end - start)*1e+9 # in ns
+            time_cpu[i][p] = (end - start)*1e+3 # in ms
             try:
-                assert (np.all(out_naive == out_cpu))
-#                assert (np.all(out_optimized1 == out_cpu))
-#                assert (np.all(out_optimized2 == out_cpu))
+                assert (np.all(((out_naive - out_cpu)/out_cpu < 0.0001)))
             except AssertionError:
-                print("\nCheckpoint failed: GPU results doesn't match CPU result!\n")
-                print(out_cpu)
-                print(out_naive)
-#            print(out_optimized1)
-#            print(out_optimized2)
-"""
+                print("\nCheckpoint failed: naive results doesn't match CPU result!\n")
+            print("naive and CPU results match!")
+
+            try:
+                assert (np.all(((out_optimized1 - out_cpu)/out_cpu < 0.0001)))
+            except AssertionError:
+                print("\nCheckpoint failed: optimized-1 results doesn't match CPU result!\n")
+            print("optimized-1 and CPU results match!")
+
+            try:
+                assert (np.all(((out_optimized2 - out_cpu)/out_cpu < 0.0001)))
+            except AssertionError:
+                print("\nCheckpoint failed: optimized-2 results doesn't match CPU result!\n")
+            print("optimized-2 and CPU results match!")
+
     avg_t_naive = np.average(time_naive, axis=0)
     avg_t_optimized1 = np.average(time_optimized1, axis=0)
     avg_t_optimized2 = np.average(time_optimized2, axis=0)
     avg_t_cpu = np.average(time_cpu, axis=0)
 
-    print(avg_t_cpu.shape)
-    print(avg_t_cpu)
     # Execution time
     factor = []
-    for i in range(matrix_factor):
-        factor.append(2**i)
+    for i in range(matrix_factor + 1):
+        factor.append(2**i) # 1, 2, 4, 8, ..., 1024
     print(factor)
-        
-    print("\n============Exec time of each matrix size for each run =============")
-#    print("{0:<12}{1:<12}  {2:<12}   {3:<16} {4:<16} {5:<16}".format("run NO.","matrix_size", "time_cpu(ns)", "time_naive(ns)", "time_opt1(ns)", "time_opt2(ns)"))
     
- #   for r in range(5):
- #       for i in range(matrix_factor):
- #           print("{0:<12}{1:<12}  {2:<12}     {3:.6f}         {4:.6f}   {5:.6f}".format(r, factor[i], time_cpu[r][i], time_naive[r][i], time_optimized1[r][i]), time_optimized2[r][i]))
-    print("-------------------------------------------------------------------------")
-    print("\n=========Exec time of each matrix size average over 5 run ==========")
-    print("{0:<12}  {1:<12}   {2:<16} {3:<16}  {4:<16}".format("matrix_size", "time_cpu(ns)", "time_naive(ns)", "time_opt1(ns)", "time_opt2(ns)"))
-#    for i in range(matrix_factor):
-#       print('{0:<12}  {1:<12}     {2:.6f}         {3:.6f}  {4:.6f}'.format(factor[i], ave_t_cpu[i], avg_t_naive[i], avg_t_optimized1[i]), avg_t_optimized2[i]))
-
-
-    
-    x = np.linspace(1,matrix_factor,matrix_factor)
+    x = np.linspace(0, matrix_factor+1, matrix_factor+1)
     fig, ax = plt.subplots()
     line1, = ax.plot(x, avg_t_cpu, label='CPU')
     line2, = ax.plot(x, avg_t_naive, label = 'GPU-naive')
@@ -255,12 +254,16 @@ if __name__ == '__main__':
 
     ax.set_title('Execution Time comparison')
     ax.set_xlabel('factor of matrix size')
-    ax.set_ylabel('Time (us) -- Log scale')
+    ax.set_ylabel('Time (ms) -- Log scale')
     ax.set_yscale('log')
+    ax.text(1,10, 'Base matrix size : (%d, %d)'%(height, width))
+    ax.text(1,5, 'Max  matrix size : (%d, %d)'%(height* 2**p, width* 2**p))
     ax.grid(True)
     ax.set_xlim(0, matrix_factor + 1)
     ax.xaxis.set_ticks(np.arange(0,matrix_factor + 1, 2))
     ax.legend()                
     plt.savefig("plots/HW3_mmul_time_comparison.png")
-                                                                                        
-"""
+
+
+
+    
